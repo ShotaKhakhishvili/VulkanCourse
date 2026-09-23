@@ -20,6 +20,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 	{
 		createInstance();
 		getPhysicalDevice();
+		createLogicalDevice();
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -32,6 +33,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 
 void VulkanRenderer::cleanup()
 {
+	vkDestroyDevice(mainDevice.logicalDevice, nullptr);
 	vkDestroyInstance(instance, nullptr);
 }
 
@@ -102,6 +104,64 @@ void VulkanRenderer::createInstance()
 	{
 		throw std::runtime_error("Failed To Create Vulkan Instance");
 	}
+
+}
+
+void VulkanRenderer::createLogicalDevice()
+{
+	QueueFamilyIndices indices = getQueueFamilies(mainDevice.physicaDevice);
+
+
+	/*
+	    VkStructureType             sType;
+		const void*                 pNext;
+		VkDeviceQueueCreateFlags    flags;
+		uint32_t                    queueFamilyIndex;
+		uint32_t                    queueCount;
+		const float*                pQueuePriorities;
+	*/
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+	queueCreateInfo.queueCount = 1;
+	float priority = 1.0f;
+	queueCreateInfo.pQueuePriorities = &priority;
+
+	/*
+	    VkStructureType                    sType;
+		const void*                        pNext;
+		VkDeviceCreateFlags                flags;
+		uint32_t                           queueCreateInfoCount;
+		const VkDeviceQueueCreateInfo*     pQueueCreateInfos;
+		// enabledLayerCount is legacy and not used
+		uint32_t                           enabledLayerCount;
+		// ppEnabledLayerNames is legacy and not used
+		const char* const*                 ppEnabledLayerNames;
+		uint32_t                           enabledExtensionCount;
+		const char* const*                 ppEnabledExtensionNames;
+		const VkPhysicalDeviceFeatures*    pEnabledFeatures; 
+	*/
+	VkDeviceCreateInfo createInfo{};
+	createInfo.sType							= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	createInfo.queueCreateInfoCount				= 1;
+	createInfo.pQueueCreateInfos				= &queueCreateInfo;
+
+	createInfo.enabledExtensionCount			= 0;
+	createInfo.ppEnabledExtensionNames			= nullptr;
+
+
+	VkPhysicalDeviceFeatures physDeviceFeatures{};
+	createInfo.pEnabledFeatures					= &physDeviceFeatures;
+
+	VkResult result = vkCreateDevice(mainDevice.physicaDevice, &createInfo, nullptr, &mainDevice.logicalDevice);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Logical device was not created successfully");
+	}
+
+	// queues are created at the same time as the device, so we want to handle queues
+	vkGetDeviceQueue(mainDevice.logicalDevice, indices.graphicsFamily, 0, &graphicsQueue);
 }
 
 bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* extensions)
@@ -143,13 +203,13 @@ void VulkanRenderer::getPhysicalDevice()
 	{
 		if (checkDeviceSuitable(device))
 		{
-			mainDevice.physDevice = device;
+			mainDevice.physicaDevice = device;
 			break;
 		}
 	}
 }
 
-QueueFamilyIndices VulkanRenderer::getQueueFamilyIndices(VkPhysicalDevice physDevice)
+QueueFamilyIndices VulkanRenderer::getQueueFamilies(VkPhysicalDevice physDevice)
 {
 	QueueFamilyIndices indices{};
 
@@ -195,7 +255,7 @@ bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
 
 	*/
 
-	QueueFamilyIndices indices = getQueueFamilyIndices(device);
+	QueueFamilyIndices indices = getQueueFamilies(device);
 
 	return indices.isValid();
 }
