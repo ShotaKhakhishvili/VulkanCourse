@@ -19,6 +19,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 	try
 	{
 		createInstance();
+		getPhysicalDevice();
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -123,4 +124,78 @@ bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* ext
 	}
 
 	return true;
+}
+
+void VulkanRenderer::getPhysicalDevice()
+{
+	uint32_t deviceCount = 0;
+	vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+	if (deviceCount == 0)
+	{
+		throw std::runtime_error("Can't Find Any GPU");
+	}
+
+	std::vector<VkPhysicalDevice> devices(deviceCount);
+	vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+	for (const auto& device : devices)
+	{
+		if (checkDeviceSuitable(device))
+		{
+			mainDevice.physDevice = device;
+			break;
+		}
+	}
+}
+
+QueueFamilyIndices VulkanRenderer::getQueueFamilyIndices(VkPhysicalDevice physDevice)
+{
+	QueueFamilyIndices indices{};
+
+	uint32_t queueFamiliesCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamiliesCount, nullptr);
+
+	std::vector<VkQueueFamilyProperties> properties(queueFamiliesCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physDevice, &queueFamiliesCount, properties.data());
+
+	int i = 0;
+	for (const auto& queueFamily : properties)
+	{
+		// Family must have at least one queue, and support graphics
+		if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
+		{
+			indices.graphicsFamily = i;
+		}
+
+		// Stop once everything we need has been found
+		if (indices.isValid())
+		{
+			break;
+		}
+
+		i++;
+	}
+
+	return indices;
+}
+
+
+bool VulkanRenderer::checkDeviceSuitable(VkPhysicalDevice device)
+{
+	/* 
+	
+	// device info
+	VkPhysicalDeviceProperties deviceProperties;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+	// what device can do
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+	*/
+
+	QueueFamilyIndices indices = getQueueFamilyIndices(device);
+
+	return indices.isValid();
 }

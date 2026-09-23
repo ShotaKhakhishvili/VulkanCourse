@@ -6,6 +6,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "Utilities.h"
+
 class VulkanRenderer
 {
 public:
@@ -21,6 +23,24 @@ private:
 
 	VkInstance instance = VK_NULL_HANDLE;
 
+	struct {
+		VkPhysicalDevice physDevice;
+		VkDevice logDevice;
+	} mainDevice;
+
+
+	// create functions
+
 	void createInstance();
+
+	// getter functions
+
+	void getPhysicalDevice();
+	QueueFamilyIndices getQueueFamilyIndices(VkPhysicalDevice physDevice);
+
+	// checker functions
+
 	bool checkInstanceExtensionSupport(std::vector<const char*>* extensions);
+	bool checkDeviceSuitable(VkPhysicalDevice device);
+
 };
