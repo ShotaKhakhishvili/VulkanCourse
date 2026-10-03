@@ -48,6 +48,7 @@ private:
 	void createLogicalDevice();
 	void createSurface();
 	void createSwapchain();
+	void createGraphicsPipeline();
 
 	// -------- Support Function -----------
 
@@ -68,6 +69,7 @@ private:
 	VkSurfaceFormatKHR chooseBestSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& surfaceFormats);
 	VkPresentModeKHR chooseBestPresentMode(const std::vector<VkPresentModeKHR>& capabilities);
 	VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+	VkShaderModule createShaderModule(const std::vector<char>& fileBuffer);
 
 	// create
 

@@ -25,6 +25,7 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		getPhysicalDevice();
 		createLogicalDevice();
 		createSwapchain();
+		createGraphicsPipeline();
 	}
 	catch (const std::runtime_error& e)
 	{
@@ -302,6 +303,42 @@ void VulkanRenderer::createSwapchain()
 
 }
 
+void VulkanRenderer::createGraphicsPipeline()
+{
+	auto vertShader = readFile("Shaders/vert.spv");
+	auto fragShader = readFile("Shaders/frag.spv");
+
+	VkShaderModule vertShaderModule = createShaderModule(vertShader);
+	VkShaderModule fragShaderModule = createShaderModule(fragShader);
+
+	/*
+	    VkStructureType                     sType;
+		const void*                         pNext;
+		VkPipelineShaderStageCreateFlags    flags;
+		VkShaderStageFlagBits               stage;
+		VkShaderModule                      module;
+		const char*                         pName;
+		const VkSpecializationInfo*         pSpecializationInfo; 
+	*/
+
+	VkPipelineShaderStageCreateInfo vertStageCreateInfo = {};
+	vertStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertStageCreateInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertStageCreateInfo.module = vertShaderModule;
+	vertStageCreateInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo fragStageCreateInfo = {};
+	fragStageCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragStageCreateInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragStageCreateInfo.module = fragShaderModule;
+	fragStageCreateInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo pipelineShaderStageCreateInfo[] = { vertStageCreateInfo, fragStageCreateInfo };
+
+	vkDestroyShaderModule(mainDevice.logicalDevice, fragShaderModule, nullptr);
+	vkDestroyShaderModule(mainDevice.logicalDevice, vertShaderModule, nullptr);
+}
+
 bool VulkanRenderer::checkInstanceExtensionSupport(std::vector<const char*>* extensions)
 {
 	uint32_t extensionCount = 0;
@@ -523,6 +560,25 @@ VkExtent2D VulkanRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capa
 	newExtent.height = std::clamp(newExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 
 	return newExtent;
+}
+
+VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& fileBuffer)
+{
+	VkShaderModuleCreateInfo shaderModuleCreateInfo = {};
+	shaderModuleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCreateInfo.codeSize = fileBuffer.size();
+	shaderModuleCreateInfo.pCode = reinterpret_cast<const uint32_t * >(fileBuffer.data());
+
+	VkShaderModule shaderModule;
+
+	VkResult result = vkCreateShaderModule(mainDevice.logicalDevice, &shaderModuleCreateInfo, nullptr, &shaderModule);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Couldn't create a shader module");
+	}
+
+	return shaderModule;
 }
 
 VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
