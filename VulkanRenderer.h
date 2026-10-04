@@ -5,6 +5,7 @@
 
 #include <stdexcept>
 #include <vector>
+#include <array>
 
 #include "Utilities.h"
 
@@ -37,6 +38,13 @@ private:
 	VkSwapchainKHR swapchain;
 	std::vector<SwapchainImage> swapchainImages;
 
+	// Pipeline
+	
+	VkPipeline	graphicsPipeline;
+	VkPipelineLayout pipelineLayout;
+	VkRenderPass renderPass;
+
+
 	// Utilities
 
 	VkFormat swapchainImageFormat;
@@ -48,6 +56,7 @@ private:
 	void createLogicalDevice();
 	void createSurface();
 	void createSwapchain();
+	void createRenderPass();
 	void createGraphicsPipeline();
 
 	// -------- Support Function -----------
