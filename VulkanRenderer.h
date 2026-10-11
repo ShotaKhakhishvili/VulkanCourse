@@ -37,6 +37,8 @@ private:
 	VkSurfaceKHR surface;
 	VkSwapchainKHR swapchain;
 	std::vector<SwapchainImage> swapchainImages;
+	std::vector<VkFramebuffer> swapchainFramebuffers;
+	std::vector<VkCommandBuffer> commandBuffers;
 
 	// Pipeline
 	
@@ -44,6 +46,9 @@ private:
 	VkPipelineLayout pipelineLayout;
 	VkRenderPass renderPass;
 
+	// Pools
+
+	VkCommandPool graphicsCommandPool;
 
 	// Utilities
 
@@ -58,8 +63,15 @@ private:
 	void createSwapchain();
 	void createRenderPass();
 	void createGraphicsPipeline();
+	void createFramebuffers();
+	void createCommandPool();
+	void createCommandBuffers();
 
-	// -------- Support Function -----------
+	// record functinos
+
+	void recordCommands();
+
+	// -------- Support Function 
 
 	// getter functions
 
