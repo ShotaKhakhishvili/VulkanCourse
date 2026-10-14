@@ -23,6 +23,8 @@ public:
 private:
 	GLFWwindow* window;
 
+	int currentFrame = 0;
+
 	// Main 
 
 	VkInstance instance = VK_NULL_HANDLE;
@@ -58,8 +60,9 @@ private:
 
 	// Synchronization
 
-	VkSemaphore imageAvailable;
-	VkSemaphore renderFinished;
+	std::vector<VkSemaphore> imageAvailable;
+	std::vector<VkSemaphore> renderFinished;
+	std::vector<VkFence> drawFences;
 
 	// create functions
 

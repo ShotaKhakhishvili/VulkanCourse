@@ -46,8 +46,12 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 void VulkanRenderer::draw()
 {
 	// Get index of the next image to be drawn to
+
+	vkWaitForFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+	vkResetFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame]);
+
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), imageAvailable, VK_NULL_HANDLE, &imageIndex);
+	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), imageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex);
 
 	// submit command to buffer to render
 	VkSubmitInfo submitInfo = {};
@@ -57,14 +61,14 @@ void VulkanRenderer::draw()
 
 	submitInfo.sType					= VK_STRUCTURE_TYPE_SUBMIT_INFO;
 	submitInfo.waitSemaphoreCount		= 1;
-	submitInfo.pWaitSemaphores			= &imageAvailable;
+	submitInfo.pWaitSemaphores			= &imageAvailable[currentFrame];
 	submitInfo.pWaitDstStageMask		= waitStageFlags;
 	submitInfo.commandBufferCount		= 1;
 	submitInfo.pCommandBuffers			= &commandBuffers[imageIndex];
 	submitInfo.signalSemaphoreCount		= 1;
-	submitInfo.pSignalSemaphores		= &renderFinished;
+	submitInfo.pSignalSemaphores		= &renderFinished[currentFrame];
 
-	VkResult result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+	VkResult result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, drawFences[currentFrame]);
 
 	if (result != VK_SUCCESS)
 	{
@@ -74,7 +78,7 @@ void VulkanRenderer::draw()
 	VkPresentInfoKHR presentInfo = {};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderFinished;
+	presentInfo.pWaitSemaphores = &renderFinished[currentFrame];
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = &swapchain;
 	presentInfo.pImageIndices = &imageIndex;
@@ -85,12 +89,23 @@ void VulkanRenderer::draw()
 	{
 		throw std::runtime_error("Failed to present image");
 	}
+
+	currentFrame = (currentFrame + 1) % MAX_FRAME_DRAWS;
 }
 
 void VulkanRenderer::cleanup()
 {
-	vkDestroySemaphore(mainDevice.logicalDevice, renderFinished, nullptr);
-	vkDestroySemaphore(mainDevice.logicalDevice, imageAvailable, nullptr);
+	// Wait until the device is idle, and theres nothing on the queues
+	vkDeviceWaitIdle(mainDevice.logicalDevice);
+
+
+	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++)
+	{
+		vkDestroySemaphore(mainDevice.logicalDevice, renderFinished[i], nullptr);
+		vkDestroySemaphore(mainDevice.logicalDevice, imageAvailable[i], nullptr);
+		vkDestroyFence(mainDevice.logicalDevice, drawFences[i], nullptr);
+	}
+
 	vkDestroyCommandPool(mainDevice.logicalDevice, graphicsCommandPool, nullptr);
 	for (auto framebuffer : swapchainFramebuffers)
 	{
@@ -209,20 +224,6 @@ void VulkanRenderer::createLogicalDevice()
 		queueCreateInfos.push_back(queueCreateInfo);
 	}
 
-	/*
-	    VkStructureType                    sType;
-		const void*                        pNext;
-		VkDeviceCreateFlags                flags;
-		uint32_t                           queueCreateInfoCount;
-		const VkDeviceQueueCreateInfo*     pQueueCreateInfos;
-		// enabledLayerCount is legacy and not used
-		uint32_t                           enabledLayerCount;
-		// ppEnabledLayerNames is legacy and not used
-		const char* const*                 ppEnabledLayerNames;
-		uint32_t                           enabledExtensionCount;
-		const char* const*                 ppEnabledExtensionNames;
-		const VkPhysicalDeviceFeatures*    pEnabledFeatures; 
-	*/
 	VkDeviceCreateInfo createInfo{};
 	createInfo.sType							= VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	createInfo.queueCreateInfoCount				= static_cast<uint32_t>(queueCreateInfos.size());
@@ -278,27 +279,6 @@ void VulkanRenderer::createSwapchain()
 	{
 		imageCount = swapChainDetails.surfaceCapabilities.maxImageCount;
 	}
-
-	/*
-	    VkStructureType                  sType;
-		const void*                      pNext;
-		VkSwapchainCreateFlagsKHR        flags;
-		VkSurfaceKHR                     surface;
-		uint32_t                         minImageCount;
-		VkFormat                         imageFormat;
-		VkColorSpaceKHR                  imageColorSpace;
-		VkExtent2D                       imageExtent;
-		uint32_t                         imageArrayLayers;
-		VkImageUsageFlags                imageUsage;
-		VkSharingMode                    imageSharingMode;
-		uint32_t                         queueFamilyIndexCount;
-		const uint32_t*                  pQueueFamilyIndices;
-		VkSurfaceTransformFlagBitsKHR    preTransform;
-		VkCompositeAlphaFlagBitsKHR      compositeAlpha;
-		VkPresentModeKHR                 presentMode;
-		VkBool32                         clipped;
-		VkSwapchainKHR                   oldSwapchain;
-	*/
 
 	VkSwapchainCreateInfoKHR swapchainCreateInfo{};
 	swapchainCreateInfo.sType							= VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -436,16 +416,6 @@ void VulkanRenderer::createGraphicsPipeline()
 
 	VkShaderModule vertShaderModule = createShaderModule(vertShader);
 	VkShaderModule fragShaderModule = createShaderModule(fragShader);
-
-	/*
-	    VkStructureType                     sType;
-		const void*                         pNext;
-		VkPipelineShaderStageCreateFlags    flags;
-		VkShaderStageFlagBits               stage;
-		VkShaderModule                      module;
-		const char*                         pName;
-		const VkSpecializationInfo*         pSpecializationInfo; 
-	*/
 
 	VkPipelineShaderStageCreateInfo vertStageCreateInfo = {};
 	vertStageCreateInfo.sType	= VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -662,13 +632,26 @@ void VulkanRenderer::createCommandBuffers()
 
 void VulkanRenderer::createSynchronization()
 {
+	imageAvailable.resize(MAX_FRAME_DRAWS);
+	renderFinished.resize(MAX_FRAME_DRAWS);
+	drawFences.resize(MAX_FRAME_DRAWS);
+
 	VkSemaphoreCreateInfo semaphoreCreateInfo = {};
 	semaphoreCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-	if (vkCreateSemaphore(mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &imageAvailable) ||
-		vkCreateSemaphore(mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &renderFinished)
-		!= VK_SUCCESS)
+
+	VkFenceCreateInfo fenceCreateInfo = {};
+	fenceCreateInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCreateInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++)
 	{
-		throw std::runtime_error("Couldn't create semaphores");
+		if (vkCreateSemaphore(mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &imageAvailable[i]) ||
+			vkCreateSemaphore(mainDevice.logicalDevice, &semaphoreCreateInfo, nullptr, &renderFinished[i]) ||
+			vkCreateFence(mainDevice.logicalDevice, &fenceCreateInfo, nullptr, &drawFences[i])
+			!= VK_SUCCESS)
+		{
+			throw std::runtime_error("Couldn't create semaphores and/or fences");
+		}
 	}
 }
 
@@ -678,10 +661,9 @@ void VulkanRenderer::recordCommands()
 
 	VkCommandBufferBeginInfo bufferBeginInfo = {};
 	bufferBeginInfo.sType	= VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	bufferBeginInfo.flags	= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT; // buffer can be resumbitted when its already been submitted and is awaiting an execution
 
 	VkClearValue clearValues[] = {
-		{0.6f, 0.65f, 0.4f, 1.0f}
+		{0.05f, 0.15f, 0.25f, 1.0f}
 	};
 
 	// Info about how to begin a render pass (only needed for graphical applications)
@@ -967,16 +949,7 @@ VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& fileB
 
 VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags)
 {
-	/*
-	    VkStructureType            sType;
-		const void*                pNext;
-		VkImageViewCreateFlags     flags;
-		VkImage                    image;
-		VkImageViewType            viewType;
-		VkFormat                   format;
-		VkComponentMapping         components;
-		VkImageSubresourceRange    subresourceRange;
-	*/
+
 	VkImageViewCreateInfo imageViewCreateInfo{};
 
 	imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
