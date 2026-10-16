@@ -30,6 +30,20 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
+
+		// Create a mesh
+		std::vector <Vertex> meshVertices = {
+			{{-0.4, -0.4, 0.0}, {1.0, 1.0, 1.0}},
+			{{0.4, 0.4, 0.0}, {0.0, 0.0, 0.0}},
+			{{-0.4, 0.4, 0.0}, {0.5, 0.5, 1.0}},
+
+			{{-0.4, -0.4, 0.0}, {1.0, 1.0, 1.0}},
+			{{0.4, -0.4, 0.0}, {0.5, 0.5, 1.0}},
+			{{0.4, 0.4, 0.0}, {0.0, 0.0, 0.0}}
+		};
+
+		testMesh = Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool, &meshVertices);
+
 		createCommandBuffers();
 		recordCommands();
 		createSynchronization();
@@ -98,6 +112,7 @@ void VulkanRenderer::cleanup()
 	// Wait until the device is idle, and theres nothing on the queues
 	vkDeviceWaitIdle(mainDevice.logicalDevice);
 
+	testMesh.destroyVertexBuffer();
 
 	for (size_t i = 0; i < MAX_FRAME_DRAWS; i++)
 	{
@@ -128,15 +143,6 @@ void VulkanRenderer::cleanup()
 
 void VulkanRenderer::createInstance()
 {
-	/*
-		VkStructureType    sType;
-		const void*        pNext;
-		const char*        pApplicationName;
-		uint32_t           applicationVersion;
-		const char*        pEngineName;
-		uint32_t           engineVersion;
-		uint32_t           apiVersion;
-	*/
 	VkApplicationInfo appInfo{};
 
 	appInfo.sType				= VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -147,16 +153,6 @@ void VulkanRenderer::createInstance()
 	appInfo.engineVersion		= VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion			= VK_API_VERSION_1_4;
 
-	/*
-		VkStructureType             sType;
-		const void*                 pNext;
-		VkInstanceCreateFlags       flags;
-		const VkApplicationInfo*    pApplicationInfo;
-		uint32_t                    enabledLayerCount;
-		const char* const*          ppEnabledLayerNames;
-		uint32_t                    enabledExtensionCount;
-		const char* const*          ppEnabledExtensionNames;
-	*/
 	VkInstanceCreateInfo createInfo{};
 
 	std::vector<const char*> instanceExtensions = std::vector<const char*>();
@@ -431,13 +427,33 @@ void VulkanRenderer::createGraphicsPipeline()
 
 	VkPipelineShaderStageCreateInfo shaderStages[] = { vertStageCreateInfo, fragStageCreateInfo };
 
+	VkVertexInputBindingDescription bindingDescription = {};
+	bindingDescription.binding			= 0;			// Can bind multiple streams of data, this defins which to define
+	bindingDescription.stride			= sizeof(Vertex);
+	bindingDescription.inputRate		= VK_VERTEX_INPUT_RATE_VERTEX; 
+	
+	// VK_VERTEX_INPUT_RATE_INDEX : Move on to the next vertex when drawing
+	// VK_VERTEX_INPUT_RATE_INSTANCE : Move to a vertex of the next instance
+
+	std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions;
+	// Position Attribute
+	attributeDescriptions[0].binding		= 0;							// Which binding the data is at (should be same as above)
+	attributeDescriptions[0].location		= 0;							// Location in shader where the data will be read from
+	attributeDescriptions[0].format			= VK_FORMAT_R32G32B32_SFLOAT;	// Format the data will dake (also helps define the size of the data)
+	attributeDescriptions[0].offset			= offsetof(Vertex, pos);		// Offset of the pos attribute in the Vertex structure
+
+	attributeDescriptions[1].binding = 0;							
+	attributeDescriptions[1].location = 1;							
+	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;	
+	attributeDescriptions[1].offset = offsetof(Vertex, col);
+
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
 
 	vertexInputCreateInfo.sType								= VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputCreateInfo.vertexBindingDescriptionCount		= 0;
-	vertexInputCreateInfo.pVertexBindingDescriptions		= nullptr;
-	vertexInputCreateInfo.vertexAttributeDescriptionCount	= 0;
-	vertexInputCreateInfo.pVertexAttributeDescriptions		= nullptr;
+	vertexInputCreateInfo.vertexBindingDescriptionCount		= 1;
+	vertexInputCreateInfo.pVertexBindingDescriptions		= &bindingDescription;
+	vertexInputCreateInfo.vertexAttributeDescriptionCount	= static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputCreateInfo.pVertexAttributeDescriptions		= attributeDescriptions.data();
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 
@@ -692,7 +708,12 @@ void VulkanRenderer::recordCommands()
 		// Bind pipeline to be used in render pass
 		vkCmdBindPipeline(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
 
-		vkCmdDraw(commandBuffers[i], 3, 1, 0 ,0);
+		VkBuffer vertexBuffers[]	= { testMesh.getVertexBuffer() };				// Vertex buffers to bind and draw
+		VkDeviceSize offsets[]		= { 0 };										// Offsets of the data from the bufferss they are written to
+		
+		vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);	// Command to bind vertex buffer before drawing
+
+		vkCmdDraw(commandBuffers[i], testMesh.getVertexCount(), 1, 0 ,0);
 
 		vkCmdEndRenderPass(commandBuffers[i]);
 
