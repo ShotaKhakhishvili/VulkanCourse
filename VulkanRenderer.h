@@ -28,7 +28,7 @@ private:
 
 	// Scene objects
 
-	Mesh testMesh;
+	std::vector<Mesh> meshes;
 
 	// Main 
 
