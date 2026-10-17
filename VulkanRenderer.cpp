@@ -27,11 +27,18 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createLogicalDevice();
 		createSwapchain();
 		createRenderPass();
+		createDescriptorSetLayout();
 		createGraphicsPipeline();
 		createFramebuffers();
 		createCommandPool();
 
 		// Create a mesh
+
+		mvp.projection = glm::perspective(glm::radians(45.0f), (float)swapchainImageExtent.width/swapchainImageExtent.height, 0.1f, 100.0f);
+		mvp.view = glm::lookAt(glm::vec3(3.0f, 1.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+		mvp.model = glm::mat4(1.0f);
+
+		mvp.projection[1][1] *= -1; // Inverting the y coord to match the screen coords
 
 		// Vertex Data
 		std::vector <Vertex> meshVertices1 = {
@@ -58,6 +65,9 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		meshes.push_back(Mesh(mainDevice.physicalDevice, mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool, &meshVertices2, &meshIndices));
 
 		createCommandBuffers();
+		createUniformBuffers();
+		createDescriptorPool();
+		createDescriptorSets();
 		recordCommands();
 		createSynchronization();
 	}
@@ -70,6 +80,11 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 	return 0;
 }
 
+void VulkanRenderer::updateModel(glm::mat4 newModel)
+{
+	mvp.model = newModel;
+}
+
 void VulkanRenderer::draw()
 {
 	// Get index of the next image to be drawn to
@@ -79,6 +94,8 @@ void VulkanRenderer::draw()
 
 	uint32_t imageIndex;
 	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), imageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	updateUniformBuffer(imageIndex);
 
 	// submit command to buffer to render
 	VkSubmitInfo submitInfo = {};
@@ -124,6 +141,18 @@ void VulkanRenderer::cleanup()
 {
 	// Wait until the device is idle, and theres nothing on the queues
 	vkDeviceWaitIdle(mainDevice.logicalDevice);
+
+	vkDestroyDescriptorPool(mainDevice.logicalDevice, descriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(mainDevice.logicalDevice, descriptorSetLayout, nullptr);
+
+	for (size_t i = 0; i < uniformBuffer.size(); i++)
+	{
+		vkDestroyBuffer(mainDevice.logicalDevice, uniformBuffer[i], nullptr);
+	}
+	for (size_t i = 0; i < uniformBufferMemory.size(); i++)
+	{
+		vkFreeMemory(mainDevice.logicalDevice, uniformBufferMemory[i], nullptr);
+	}
 
 	for (size_t i = 0; i < meshes.size(); i++)
 	{
@@ -421,6 +450,30 @@ void VulkanRenderer::createRenderPass()
 	}
 }
 
+void VulkanRenderer::createDescriptorSetLayout()
+{
+	// MVP binding info
+	VkDescriptorSetLayoutBinding mvpLayoutBinding	= {};
+	mvpLayoutBinding.binding						= 0;
+	mvpLayoutBinding.descriptorType					= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	mvpLayoutBinding.descriptorCount				= 1;
+	mvpLayoutBinding.stageFlags						= VK_SHADER_STAGE_VERTEX_BIT;
+	mvpLayoutBinding.pImmutableSamplers				= nullptr;								// For textures, makes the sampler data unchangable
+
+	VkDescriptorSetLayoutCreateInfo createInfo	= {};
+	createInfo.sType							= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	createInfo.bindingCount						= 1;
+	createInfo.pBindings						= &mvpLayoutBinding;
+
+	VkResult result = vkCreateDescriptorSetLayout(mainDevice.logicalDevice, &createInfo, nullptr, &descriptorSetLayout);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create descriptor set layout");
+	}
+
+}
+
 void VulkanRenderer::createGraphicsPipeline()
 {
 	auto vertShader = readFile("Shaders/vert.spv");
@@ -458,10 +511,10 @@ void VulkanRenderer::createGraphicsPipeline()
 	attributeDescriptions[0].format			= VK_FORMAT_R32G32B32_SFLOAT;	// Format the data will dake (also helps define the size of the data)
 	attributeDescriptions[0].offset			= offsetof(Vertex, pos);		// Offset of the pos attribute in the Vertex structure
 
-	attributeDescriptions[1].binding = 0;							
-	attributeDescriptions[1].location = 1;							
-	attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;	
-	attributeDescriptions[1].offset = offsetof(Vertex, col);
+	attributeDescriptions[1].binding		= 0;							
+	attributeDescriptions[1].location		= 1;							
+	attributeDescriptions[1].format			= VK_FORMAT_R32G32B32_SFLOAT;	
+	attributeDescriptions[1].offset			= offsetof(Vertex, col);
 
 	VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
 
@@ -521,7 +574,7 @@ void VulkanRenderer::createGraphicsPipeline()
 	rasterizerCreateInfo.polygonMode				= VK_POLYGON_MODE_FILL;
 	rasterizerCreateInfo.lineWidth					= 1.0f;
 	rasterizerCreateInfo.cullMode					= VK_CULL_MODE_BACK_BIT;
-	rasterizerCreateInfo.frontFace					= VK_FRONT_FACE_CLOCKWISE;
+	rasterizerCreateInfo.frontFace					= VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizerCreateInfo.depthBiasEnable			= VK_FALSE;
 
 	// Multisampling
@@ -534,7 +587,8 @@ void VulkanRenderer::createGraphicsPipeline()
 	VkPipelineColorBlendAttachmentState colorState = {};
 	colorState.colorWriteMask			= VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT
 		| VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-	colorState.blendEnable = VK_TRUE;
+
+	colorState.blendEnable				= VK_TRUE;
 	// blending equation uses (srcColorBlendFactor * newColor) ColorBlendOp (dstColorBlendFactor * oldColor);
 	colorState.srcColorBlendFactor		= VK_BLEND_FACTOR_SRC_ALPHA;
 	colorState.dstColorBlendFactor		= VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
@@ -549,11 +603,11 @@ void VulkanRenderer::createGraphicsPipeline()
 	colorBlendingCreateInfo.attachmentCount		= 1;
 	colorBlendingCreateInfo.pAttachments		= &colorState;
 
-	// Pipeline Layout. TODO: Apply Future Descriptor Set Layouts
+	// Pipeline Layout
 	VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo = {}; 
 	pipelineLayoutCreateInfo.sType						= VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayoutCreateInfo.setLayoutCount				= 0;
-	pipelineLayoutCreateInfo.pSetLayouts				= nullptr;
+	pipelineLayoutCreateInfo.setLayoutCount				= 1;
+	pipelineLayoutCreateInfo.pSetLayouts				= &descriptorSetLayout;
 	pipelineLayoutCreateInfo.pushConstantRangeCount		= 0;
 	pipelineLayoutCreateInfo.pPushConstantRanges		= nullptr;
 
@@ -687,6 +741,88 @@ void VulkanRenderer::createSynchronization()
 	}
 }
 
+void VulkanRenderer::createUniformBuffers()
+{
+	VkDeviceSize bufferSize = sizeof(MVP);
+
+	uniformBuffer.resize(swapchainImages.size());
+	uniformBufferMemory.resize(swapchainImages.size());
+
+	for (size_t i = 0; i < uniformBuffer.size(); i++)
+	{
+		createBuffer(mainDevice.physicalDevice, mainDevice.logicalDevice, bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &uniformBuffer[i], &uniformBufferMemory[i]);
+	}
+}
+
+void VulkanRenderer::createDescriptorPool()
+{
+	VkDescriptorPoolSize poolSize	= {};
+	poolSize.type					= VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount		= static_cast<uint32_t>(uniformBuffer.size());
+
+
+	VkDescriptorPoolCreateInfo createInfo	= {};
+	createInfo.sType						= VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	createInfo.maxSets						= static_cast<uint32_t>(uniformBuffer.size());
+	createInfo.poolSizeCount				= 1;
+	createInfo.pPoolSizes					= &poolSize;
+
+	VkResult result = vkCreateDescriptorPool(mainDevice.logicalDevice, &createInfo, nullptr, &descriptorPool);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to create a ddescriptor pool");
+	}
+}
+
+void VulkanRenderer::createDescriptorSets()
+{
+	descriptorSets.resize(uniformBuffer.size());
+
+	std::vector<VkDescriptorSetLayout> layouts(uniformBuffer.size(), descriptorSetLayout);
+
+	VkDescriptorSetAllocateInfo allocInfo	= {};
+	allocInfo.sType							= VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool				= descriptorPool;
+	allocInfo.descriptorSetCount			= static_cast<uint32_t>(uniformBuffer.size());
+	allocInfo.pSetLayouts					= layouts.data();
+
+	VkResult result = vkAllocateDescriptorSets(mainDevice.logicalDevice, &allocInfo, descriptorSets.data());
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to allocate descriptor sets");
+	}
+
+	std::vector<VkWriteDescriptorSet> mvpSetWrites(uniformBuffer.size());
+	std::vector<VkDescriptorBufferInfo> mvpBufferInfos(uniformBuffer.size());
+
+	for (size_t i = 0; i < uniformBuffer.size(); i++)
+	{
+		mvpBufferInfos[i].buffer = uniformBuffer[i];
+		mvpBufferInfos[i].offset = 0;
+		mvpBufferInfos[i].range = sizeof(MVP);
+
+		mvpSetWrites[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		mvpSetWrites[i].dstSet = descriptorSets[i];
+		mvpSetWrites[i].dstBinding = 0;
+		mvpSetWrites[i].dstArrayElement = 0;
+		mvpSetWrites[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		mvpSetWrites[i].descriptorCount = 1;
+		mvpSetWrites[i].pBufferInfo = &mvpBufferInfos[i];
+	}
+
+	vkUpdateDescriptorSets(mainDevice.logicalDevice, uniformBuffer.size(), mvpSetWrites.data(), 0, nullptr);
+}
+
+void VulkanRenderer::updateUniformBuffer(uint32_t imageIndex)
+{
+	void* data;
+	vkMapMemory(mainDevice.logicalDevice, uniformBufferMemory[imageIndex], 0, sizeof(MVP), 0, &data);
+	memcpy(data, &mvp, sizeof(MVP));
+	vkUnmapMemory(mainDevice.logicalDevice, uniformBufferMemory[imageIndex]);
+}
+
 void VulkanRenderer::recordCommands()
 {
 	// information about how to begin each command buffer
@@ -727,11 +863,16 @@ void VulkanRenderer::recordCommands()
 		for (size_t j = 0; j < meshes.size(); j++)
 		{
 
-			VkBuffer vertexBuffers[] = { meshes[j].getVertexBuffer() };									// Vertex buffers to bind and draw
-			VkDeviceSize offsets[] = { 0 };															// Offsets of the data from the bufferss they are written to
-
-			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);						// Command to bind vertex buffer before drawing
-			vkCmdBindIndexBuffer(commandBuffers[i], meshes[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);	// Command to bind index buffer before drawing
+			VkBuffer vertexBuffers[] = { meshes[j].getVertexBuffer() };																			// Vertex buffers to bind and draw
+			VkDeviceSize offsets[] = { 0 };																										// Offsets of the data from the bufferss they are written to
+			
+			// Command to bind vertex buffer before drawing
+			vkCmdBindVertexBuffers(commandBuffers[i], 0, 1, vertexBuffers, offsets);															
+			
+			// Command to bind index buffer before drawing
+			vkCmdBindIndexBuffer(commandBuffers[i], meshes[j].getIndexBuffer(), 0, VK_INDEX_TYPE_UINT32);										
+			
+			vkCmdBindDescriptorSets(commandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,&descriptorSets[i], 0, nullptr);
 
 			vkCmdDrawIndexed(commandBuffers[i], meshes[j].getIndexCount(), 1, 0, 0, 0);
 		}
