@@ -1,5 +1,8 @@
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#include <glm/trigonometric.hpp>
 #include "VulkanRenderer.h"
 
 #include <iostream>
@@ -36,14 +39,15 @@ int main()
 		deltaTime = lastTime - now;
 		lastTime = now;
 
-		angle += deltaTime * 1000;
+		angle += deltaTime;
 		if (angle >= 360.f)
 			angle -= 360.0f;
 
-		glm::mat4 posShift = glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.5f, 0.0f));
+		glm::mat4 posShift0 = glm::translate(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, glm::sin(angle * 10)));
+		glm::mat4 posShift1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, -0.5f));
 
-		vulkanRenderer.updateModel(1, glm::rotate(posShift, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f)));
-
+		vulkanRenderer.updateModel(0, posShift0);
+		vulkanRenderer.updateModel(1, glm::rotate(posShift1, glm::radians(angle * 1000), glm::vec3(0.0f, 0.0f, 1.0f)));
 		glfwPollEvents();
 		vulkanRenderer.draw();
 	}
