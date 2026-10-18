@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 
 const int MAX_FRAME_DRAWS = 2;
+const int MAX_OBJECT_COUNT = 128;
 
 const std::vector<const char*> deviceExtensions =
 {

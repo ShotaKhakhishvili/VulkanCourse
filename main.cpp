@@ -36,11 +36,13 @@ int main()
 		deltaTime = lastTime - now;
 		lastTime = now;
 
-		angle += deltaTime * 10;
+		angle += deltaTime * 1000;
 		if (angle >= 360.f)
 			angle -= 360.0f;
 
-		vulkanRenderer.updateModel(glm::rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f)));
+		glm::mat4 posShift = glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.5f, 0.0f));
+
+		vulkanRenderer.updateModel(1, glm::rotate(posShift, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f)));
 
 		glfwPollEvents();
 		vulkanRenderer.draw();
