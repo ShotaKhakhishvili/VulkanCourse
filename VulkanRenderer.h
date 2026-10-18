@@ -62,6 +62,7 @@ private:
 	// Descriptorss
 
 	VkDescriptorSetLayout descriptorSetLayout;
+	VkPushConstantRange pushConstantRange;
 
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
@@ -69,12 +70,12 @@ private:
 	std::vector<VkBuffer> vpUniformBuffer;
 	std::vector<VkDeviceMemory> vpUniformBufferMemory;
 
-	std::vector<VkBuffer> modelDynamicUniformBuffer;
-	std::vector<VkDeviceMemory> modelDynamicUniformBufferMemory;
+	//std::vector<VkBuffer> modelDynamicUniformBuffer;
+	//std::vector<VkDeviceMemory> modelDynamicUniformBufferMemory;
 
 	VkDeviceSize minUniformBufferOffset;
-	size_t modelUniformAlignment;
-	UboModel* modelTransferSpace;
+	// size_t modelUniformAlignment;
+	// Model* modelTransferSpace;
 
 	// Pipeline
 	
@@ -105,6 +106,7 @@ private:
 	void createSwapchain();
 	void createRenderPass();
 	void createDescriptorSetLayout();
+	void createPushConstantRange();
 	void createGraphicsPipeline();
 	void createFramebuffers();
 	void createCommandPool();
@@ -119,7 +121,7 @@ private:
 
 	// record functinos
 
-	void recordCommands();
+	void recordCommands(size_t imageIndex);
 
 	// -------- Support Function 
 
