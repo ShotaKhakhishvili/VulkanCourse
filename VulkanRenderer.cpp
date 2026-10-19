@@ -34,6 +34,8 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 		createFramebuffers();
 		createCommandPool();
 
+		int testTexture = createTexture("dirt.jpg");
+
 		// Create a mesh
 
 		uboViewProjection.projection = glm::perspective(glm::radians(45.0f), (float)swapchainImageExtent.width/swapchainImageExtent.height, 0.1f, 100.0f);
@@ -81,74 +83,18 @@ int VulkanRenderer::init(GLFWwindow* newWindow)
 	return 0;
 }
 
-void VulkanRenderer::updateModel(size_t meshIndex, glm::mat4 newModel)
-{
-	if (meshIndex >= meshes.size())
-		throw std::runtime_error("Failed to update an object out of range");
-
-	meshes[meshIndex].setModel(newModel);
-}
-
-void VulkanRenderer::draw()
-{
-	// Get index of the next image to be drawn to
-
-	vkWaitForFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
-	vkResetFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame]);
-
-	uint32_t imageIndex;
-	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), imageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex);
-
-	recordCommands(imageIndex);
-
-	updateUniformBuffers(imageIndex);
-
-	// submit command to buffer to render
-	VkSubmitInfo submitInfo = {};
-	VkPipelineStageFlags waitStageFlags[] = {
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-	};
-
-	submitInfo.sType					= VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	submitInfo.waitSemaphoreCount		= 1;
-	submitInfo.pWaitSemaphores			= &imageAvailable[currentFrame];
-	submitInfo.pWaitDstStageMask		= waitStageFlags;
-	submitInfo.commandBufferCount		= 1;
-	submitInfo.pCommandBuffers			= &commandBuffers[imageIndex];
-	submitInfo.signalSemaphoreCount		= 1;
-	submitInfo.pSignalSemaphores		= &renderFinished[currentFrame];
-
-	VkResult result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, drawFences[currentFrame]);
-
-	if (result != VK_SUCCESS)
-	{
-		throw std::runtime_error("Couldn't submit command to graphics queue");
-	}
-
-	VkPresentInfoKHR presentInfo = {};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &renderFinished[currentFrame];
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = &swapchain;
-	presentInfo.pImageIndices = &imageIndex;
-
-	result = vkQueuePresentKHR(presentationQueue, &presentInfo);
-
-	if (result != VK_SUCCESS)
-	{
-		throw std::runtime_error("Failed to present image");
-	}
-
-	currentFrame = (currentFrame + 1) % MAX_FRAME_DRAWS;
-}
-
 void VulkanRenderer::cleanup()
 {
 	// Wait until the device is idle, and theres nothing on the queues
 	vkDeviceWaitIdle(mainDevice.logicalDevice);
 
 	//_aligned_free(modelTransferSpace);
+
+	for (size_t i = 0; i < textureImages.size(); i++)
+	{
+		vkDestroyImage(mainDevice.logicalDevice, textureImages[i], nullptr);
+		vkFreeMemory(mainDevice.logicalDevice, textureImageMemory[i], nullptr);
+	}
 
 	vkDestroyImageView(mainDevice.logicalDevice, depthBufferImageView, nullptr);
 	vkDestroyImage(mainDevice.logicalDevice, depthBufferImage, nullptr);
@@ -195,6 +141,68 @@ void VulkanRenderer::cleanup()
 	vkDestroySurfaceKHR(instance, surface, nullptr);
 	vkDestroyDevice(mainDevice.logicalDevice, nullptr);
 	vkDestroyInstance(instance, nullptr);
+}
+
+void VulkanRenderer::updateModel(size_t meshIndex, glm::mat4 newModel)
+{
+	if (meshIndex >= meshes.size())
+		throw std::runtime_error("Failed to update an object out of range");
+
+	meshes[meshIndex].setModel(newModel);
+}
+
+void VulkanRenderer::draw()
+{
+	// Get index of the next image to be drawn to
+
+	vkWaitForFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame], VK_TRUE, std::numeric_limits<uint64_t>::max());
+	vkResetFences(mainDevice.logicalDevice, 1, &drawFences[currentFrame]);
+
+	uint32_t imageIndex;
+	vkAcquireNextImageKHR(mainDevice.logicalDevice, swapchain, std::numeric_limits<uint64_t>::max(), imageAvailable[currentFrame], VK_NULL_HANDLE, &imageIndex);
+
+	recordCommands(imageIndex);
+
+	updateUniformBuffers(imageIndex);
+
+	// submit command to buffer to render
+	VkSubmitInfo submitInfo = {};
+	VkPipelineStageFlags waitStageFlags[] = {
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+	};
+
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &imageAvailable[currentFrame];
+	submitInfo.pWaitDstStageMask = waitStageFlags;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffers[imageIndex];
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &renderFinished[currentFrame];
+
+	VkResult result = vkQueueSubmit(graphicsQueue, 1, &submitInfo, drawFences[currentFrame]);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Couldn't submit command to graphics queue");
+	}
+
+	VkPresentInfoKHR presentInfo = {};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &renderFinished[currentFrame];
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &swapchain;
+	presentInfo.pImageIndices = &imageIndex;
+
+	result = vkQueuePresentKHR(presentationQueue, &presentInfo);
+
+	if (result != VK_SUCCESS)
+	{
+		throw std::runtime_error("Failed to present image");
+	}
+
+	currentFrame = (currentFrame + 1) % MAX_FRAME_DRAWS;
 }
 
 void VulkanRenderer::createInstance()
@@ -1289,6 +1297,78 @@ VkShaderModule VulkanRenderer::createShaderModule(const std::vector<char>& fileB
 	}
 
 	return shaderModule;
+}
+
+int VulkanRenderer::createTexture(std::string filename)
+{
+	// Load in the image file
+	int width, height;
+	VkDeviceSize imageSize;
+
+	// Load in the texture file
+	stbi_uc* imageData = loadTextureFile(filename, &width, &height, &imageSize);
+
+	// Create staging buffer to hold the data, ready to copy to the device
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	createBuffer(mainDevice.physicalDevice, mainDevice.logicalDevice, imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+		&stagingBuffer, &stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(mainDevice.logicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+	memcpy(data, imageData, static_cast<size_t>(imageSize));
+	vkUnmapMemory(mainDevice.logicalDevice, stagingBufferMemory);
+
+	stbi_image_free(imageData);
+
+	// Create image to hold final texture
+	VkImage texImage;
+	VkDeviceMemory texImageMemory;
+
+	texImage = createImage(width, height, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, 
+		VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &texImageMemory);
+
+	// Copy data to image
+
+	// Transition of image layout from undefined to transition dst optimal
+	transitionImageLayout(mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool,
+		texImage, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+	copyImageBuffer(mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool, stagingBuffer, texImage, width, height);
+
+	// Transition of image layout from transition dst optimal to readonly optimal
+	transitionImageLayout(mainDevice.logicalDevice, graphicsQueue, graphicsCommandPool,
+		texImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	// Add texture data to vector for future reference
+	textureImages.push_back(texImage);
+	textureImageMemory.push_back(texImageMemory);
+
+	// Destroy staging buffers
+	vkDestroyBuffer(mainDevice.logicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(mainDevice.logicalDevice, stagingBufferMemory, nullptr);
+
+	return textureImages.size() - 1;
+}
+
+stbi_uc* VulkanRenderer::loadTextureFile(std::string& filename, int* width, int* height, VkDeviceSize* imageSize)
+{
+	// Number of channels image uses
+	int channels;
+
+	// Load pixel data from an image
+	std::string fileLoc = "Textures/" + filename;
+	stbi_uc* image = stbi_load(fileLoc.c_str(), width, height, &channels, STBI_rgb_alpha);
+
+	if (!image)
+		throw std::runtime_error("Failed to load an texture file: {" + filename + "}");
+
+	// Calculate image size using given and known data
+	(*imageSize) = (*width) * (*height) * 4;
+
+	return image;
 }
 
 VkImage VulkanRenderer::createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usageFlags, VkMemoryPropertyFlags propertyFlags, VkDeviceMemory* imageMemory)

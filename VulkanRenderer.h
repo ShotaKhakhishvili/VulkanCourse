@@ -3,6 +3,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include "stb_image.h"
 #include <stdexcept>
 #include <vector>
 #include <array>
@@ -77,6 +78,11 @@ private:
 
 	//std::vector<VkBuffer> modelDynamicUniformBuffer;
 	//std::vector<VkDeviceMemory> modelDynamicUniformBufferMemory;
+
+	// Assets
+
+	std::vector<VkImage> textureImages;
+	std::vector<VkDeviceMemory> textureImageMemory;
 
 	VkDeviceSize minUniformBufferOffset;
 	// size_t modelUniformAlignment;
@@ -161,4 +167,10 @@ private:
 
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& fileBuffer);
+
+	int createTexture(std::string filename);
+
+	// loaders
+
+	stbi_uc* loadTextureFile(std::string& filename, int* width, int* height, VkDeviceSize* imageSize);
 };
