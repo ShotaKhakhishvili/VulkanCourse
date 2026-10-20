@@ -65,13 +65,18 @@ private:
 	VkImageView depthBufferImageView;
 	VkFormat depthFormat;
 
-	// Descriptorss
+	VkSampler textureSampler;
+
+	// Descriptors
 
 	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorSetLayout samplerSetLayout;
 	VkPushConstantRange pushConstantRange;
 
 	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
+	VkDescriptorPool samplerDescriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;				// One for each swapchain image
+	std::vector<VkDescriptorSet> samplerDescriptorSets;			// One for each texture
 
 	std::vector<VkBuffer> vpUniformBuffer;
 	std::vector<VkDeviceMemory> vpUniformBufferMemory;
@@ -83,6 +88,7 @@ private:
 
 	std::vector<VkImage> textureImages;
 	std::vector<VkDeviceMemory> textureImageMemory;
+	std::vector<VkImageView> textureImageView;
 
 	VkDeviceSize minUniformBufferOffset;
 	// size_t modelUniformAlignment;
@@ -124,6 +130,7 @@ private:
 	void createCommandPool();
 	void createCommandBuffers();
 	void createSynchronization();
+	void createTextureSampler();
 
 	void createUniformBuffers();
 	void createDescriptorPool();
@@ -168,9 +175,11 @@ private:
 	VkImageView createImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 	VkShaderModule createShaderModule(const std::vector<char>& fileBuffer);
 
-	int createTexture(std::string filename);
+	int createTextureImage(const std::string& filename);
+	int createTexture(const std::string& filename);
+	int createTextureDescriptor(VkImageView imageView);
 
 	// loaders
 
-	stbi_uc* loadTextureFile(std::string& filename, int* width, int* height, VkDeviceSize* imageSize);
+	stbi_uc* loadTextureFile(const std::string& filename, int* width, int* height, VkDeviceSize* imageSize);
 };
