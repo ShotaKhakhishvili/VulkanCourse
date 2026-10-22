@@ -1,5 +1,4 @@
 #include "Mesh.h"
-
 #include <stdexcept>
 #include <cstring>
 

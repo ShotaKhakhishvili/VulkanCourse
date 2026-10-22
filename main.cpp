@@ -44,11 +44,13 @@ int main()
 		if (angle >= 360.f)
 			angle -= 360.0f;
 
-		glm::mat4 posShift0 = glm::translate(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, glm::sin(angle * 10)));
-		glm::mat4 posShift1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.25f, 0.25f, -0.5f));
+		glm::mat4 posShift0 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -1.3f, 6.0f));
+		glm::mat4 posShift1 = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -6.0f));
 
-		vulkanRenderer.updateModel(0, posShift0);
-		vulkanRenderer.updateModel(1, glm::rotate(posShift1, glm::radians(angle * 1000), glm::vec3(0.0f, 0.0f, 1.0f)));
+		//vulkanRenderer.updateModel(0, posShift0);
+		vulkanRenderer.updateModel(0, glm::rotate(posShift0, glm::radians(angle * 40), glm::vec3(0.0f, 1.0f, 0.0f)));
+		vulkanRenderer.updateModel(1, glm::rotate(posShift1, glm::radians(270.0f - angle * 40), glm::vec3(0.0f, 1.0f, 0.0f)));
+
 		glfwPollEvents();
 		vulkanRenderer.draw();
 	}

@@ -3,13 +3,16 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
+#include <assimp/importer.hpp>
+#include <assimp/scene.h>
+#include <assimp/postprocess.h>
 #include "stb_image.h"
 #include <stdexcept>
 #include <vector>
 #include <array>
 
 #include "Utilities.h"
-#include "Mesh.h"
+#include "MeshModel.h"
 
 class VulkanRenderer
 {
@@ -29,10 +32,6 @@ private:
 	GLFWwindow* window;
 
 	int currentFrame = 0;
-
-	// Scene objects
-
-	std::vector<Mesh> meshes;
 
 	// Scene settings
 	
@@ -85,6 +84,8 @@ private:
 	//std::vector<VkDeviceMemory> modelDynamicUniformBufferMemory;
 
 	// Assets
+
+	std::vector<MeshModel> models;
 
 	std::vector<VkImage> textureImages;
 	std::vector<VkDeviceMemory> textureImageMemory;
@@ -178,6 +179,8 @@ private:
 	int createTextureImage(const std::string& filename);
 	int createTexture(const std::string& filename);
 	int createTextureDescriptor(VkImageView imageView);
+
+	void createMeshModel(const std::string& fileName);
 
 	// loaders
 
