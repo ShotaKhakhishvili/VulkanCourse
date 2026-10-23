@@ -52,5 +52,11 @@
     <None Include="Shaders\shader.vert">
       <Filter>Resource Files</Filter>
     </None>
+    <None Include="Shaders\shader2.frag">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="Shaders\shader2.vert">
+      <Filter>Resource Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

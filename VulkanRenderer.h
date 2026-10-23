@@ -59,9 +59,14 @@ private:
 	std::vector<VkFramebuffer> swapchainFramebuffers;
 	std::vector<VkCommandBuffer> commandBuffers;
 
-	VkImage depthBufferImage;
-	VkDeviceMemory depthBufferImageMemory;
-	VkImageView depthBufferImageView;
+	std::vector<VkImage> colorBufferImage;
+	std::vector<VkDeviceMemory> colorBufferImageMemory;
+	std::vector<VkImageView> colorBufferImageView;
+	VkFormat colorFormat;
+
+	std::vector<VkImage> depthBufferImage;
+	std::vector<VkDeviceMemory> depthBufferImageMemory;
+	std::vector<VkImageView> depthBufferImageView;
 	VkFormat depthFormat;
 
 	VkSampler textureSampler;
@@ -69,13 +74,16 @@ private:
 	// Descriptors
 
 	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorSetLayout inputSetLayout;
 	VkDescriptorSetLayout samplerSetLayout;
 	VkPushConstantRange pushConstantRange;
 
 	VkDescriptorPool descriptorPool;
 	VkDescriptorPool samplerDescriptorPool;
+	VkDescriptorPool inputDescriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;				// One for each swapchain image
 	std::vector<VkDescriptorSet> samplerDescriptorSets;			// One for each texture
+	std::vector<VkDescriptorSet> inputDescriptorSets;
 
 	std::vector<VkBuffer> vpUniformBuffer;
 	std::vector<VkDeviceMemory> vpUniformBufferMemory;
@@ -99,6 +107,10 @@ private:
 	
 	VkPipeline	graphicsPipeline;
 	VkPipelineLayout pipelineLayout;
+	VkPipeline	secondPipeline;
+	VkPipelineLayout secondPipelineLayout;
+
+
 	VkRenderPass renderPass;
 
 	// Pools
@@ -126,6 +138,7 @@ private:
 	void createDescriptorSetLayout();
 	void createPushConstantRange();
 	void createGraphicsPipeline();
+	void createColorBufferImage();
 	void createDepthBufferImage();
 	void createFramebuffers();
 	void createCommandPool();
@@ -136,6 +149,7 @@ private:
 	void createUniformBuffers();
 	void createDescriptorPool();
 	void createDescriptorSets();
+	void createInputDescriptorSets();
 
 	void updateUniformBuffers(uint32_t imageIndex);
 
